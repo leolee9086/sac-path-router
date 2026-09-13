@@ -20,6 +20,11 @@ import type { Next } from './compose.js'
 export interface DispatchableRouter<Context extends RouterContext = RouterContext> {
   /** The routing middleware, in the core's `(context, next)` shape. */
   routes(): (context: Context, next?: Next) => Promise<void>
+  /**
+   * Whether some route claims a path, whatever the method. A dialect that does
+   * not expose it falls back to the matched layers its dispatch recorded.
+   */
+  claims?(path: string): boolean
 }
 
 /** Options for {@link createFetchEntry}. */
@@ -77,7 +82,8 @@ export function createFetchEntry<Context extends RouterContext = RouterContext>(
         // method no route answers is a 405, not something to forward upstream.
         // Both facts come from the dispatch that just ran, so the entry works
         // with any dialect.
-        const claimed = context.matched.some(layer => layer.methods.length > 0)
+        const claimed = options.router.claims?.(context.path)
+          ?? context.matched.some(layer => layer.methods.length > 0)
         if (claimed && !context.routed) return
         context.response = await send(context, request, options)
       }

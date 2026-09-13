@@ -58,6 +58,34 @@ export interface ExpressResponse {
   redirect(url: string, code?: number): this
   /** Finish the response with a status and no body. */
   sendStatus(code: number): this
+  /** Set one cookie. */
+  cookie(name: string, value: string, options?: CookieOptions): this
+  /** Expire one cookie. */
+  clearCookie(name: string, options?: CookieOptions): this
+  /** Vary the response on one request header. */
+  vary(field: string): this
+  /** Add `Link` headers for one resource map. */
+  links(links: Record<string, string>): this
+  /** Answer with the first representation the request accepts; 406 when none does. */
+  format(types: Record<string, () => unknown>): this
+}
+
+/** Cookie attributes a response builder serializes. */
+export interface CookieOptions {
+  /** Lifetime in milliseconds. */
+  maxAge?: number
+  /** Cookie domain. */
+  domain?: string
+  /** Cookie path. */
+  path?: string
+  /** Absolute expiry. */
+  expires?: Date
+  /** Forbid script access. */
+  httpOnly?: boolean
+  /** Send only over HTTPS; implied by `sameSite: 'none'`. */
+  secure?: boolean
+  /** Cross-site policy. */
+  sameSite?: boolean | 'lax' | 'strict' | 'none'
 }
 
 /** A request handler. */

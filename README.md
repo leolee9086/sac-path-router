@@ -116,12 +116,48 @@ router.use((error, req, res, next) => res.status(500).json({ message: error.mess
 - 丢弃：HTTP server 外壳（`listen`/`respond`）、浏览器 shim（`cookies`/`delegates`/`http-assert`/`statuses` 等）
 - 改进：`AbortSignal` 原生传播（不再 `Promise.race` 造 rejection）、重派有上限、响应后再写被拦、HEAD/原型污染等加固
 
+## 匹配器：`matcher: 'regexp' | 'radix3'`
+
+```js
+import { createRouter } from 'sac-path-router'
+
+createRouter()                    // 默认：按注册顺序扫描，Koa 的调度契约
+createRouter({ matcher: 'radix3' })  // 前缀树索引，按方法取"最具体"的那条
+```
+
+| | `regexp`（默认） | `radix3` |
+|---|---|---|
+| 匹配方式 | 每条路由的正则逐个测试 | 每方法一棵 radix 前缀树 + 一条"认领树" |
+| 命中语义 | 注册顺序，全部命中都跑 | 最具体的一条（`/users/me` 胜过 `/users/:id`），无路径中间件先跑 |
+| 通配 | path-to-regexp：`(.*)`、`:rest+` | radix：`*`（单段）、`**`（剩余全部）；**正则写法仍可用**（自动走扫描回退） |
+| 未命中开销 | O(路由数) | O(路径长度) |
+| 适用 | 路由少、需要多层叠加 | 路由多（1000+）、拦截器场景 |
+
+`radix3` 模式下 `**` 等 radix 写法无法交给 `path-to-regexp` 编译，`Layer` 会容忍这类模式并把匹配权交给匹配器；参数由树返回。两种匹配器的行为一致性由 `test/matchers.test.js` 覆盖（同一张路由表，两边断言相同）。
+
+### 基准
+
+```bash
+pnpm bench          # 默认 1000 与 5000 条路由
+pnpm bench 1000 5000 20000
+```
+
+本机（Node 22.19 / Windows，20k 次派发取均值，含 fetch 入口的 Request/Response 分配）：
+
+| 路由数 | 匹配器 | 注册 ms | 命中 µs | 未命中 µs |
+|---|---|---|---|---|
+| 1000 | regexp | 29.3 | 189.5 | 250.1 |
+| 1000 | radix3 | 35.6 | 24.2 | 28.8 |
+| 5000 | regexp | 69.4 | 2030.8 | 1905.1 |
+| 5000 | radix3 | 60.7 | 18.0 | 17.9 |
+
+5000 条路由下命中快 **113×**、未命中快 **106×**（radix3 的命中/未命中成本基本不随路由数增长）。CI 会跑一遍基准并打印数字，但**不设阈值** —— 共享 runner 的抖动会让阈值变成随机红灯，性能回归靠人看这张表。
+
 ## 路线图
 
-- [ ] **radix3 匹配器**：`createRouter({ matcher: 'radix3' })`，大路由表（1000+）下按前缀树匹配；`Layer` 已是可替换接口
-- [ ] Express 兼容度补齐：`res.cookie`/`res.format`/`app.set` 等（欢迎按需提issue）
-- [ ] 更多方言：`sac-path-router/fastify`（`(request, reply)`）
-- [ ] 基准测试与 CI 性能回归
+- [ ] 更多方言：`sac-path-router/fastify`（`(request, reply)`）—— 尚未实现，不是"半成品"：目前只有 koa/express 两种 handler 形状
+- [ ] Express 兼容度继续补齐：`app.set`/`app.locals`（应用级，属）与 `res.sendFile`（需要文件系统访问，故意不做进通用核心）
+- [ ] 多方法混合注册的 radix 索引优化：`router.all('/x')` 目前落在共享树，可按需再拆
 
 ## 开发
 
@@ -129,6 +165,7 @@ router.use((error, req, res, next) => res.status(500).json({ message: error.mess
 pnpm install
 pnpm build        # tsc → dist（ESM + d.ts）
 pnpm test         # node --test（自动发现 test/*.test.js）
+pnpm bench        # 两个匹配器的路由基准
 pnpm check        # typecheck + build + test
 ```
 

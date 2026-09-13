@@ -9,6 +9,9 @@
 import { compile, parse, pathToRegexp, type Key } from 'path-to-regexp'
 import type { Middleware, Next } from './compose.js'
 
+/** Pattern standing in for a layer whose matching the router's matcher owns. */
+const NEVER_MATCHES = /(?!)/
+
 /** Options a layer accepts; the matching ones are forwarded to `path-to-regexp`. */
 export interface LayerOptions {
   /** Route name, addressable through `Router#url`. */
@@ -23,6 +26,12 @@ export interface LayerOptions {
   prefix?: string
   /** Capture nothing; used for pathless `use()` middleware. */
   ignoreCaptures?: boolean
+  /**
+   * Accept a pattern `path-to-regexp` cannot compile, leaving that pattern's
+   * matching to the router's matcher. Radix syntax (`**`) needs this; by default
+   * an uncompilable pattern is rejected at registration.
+   */
+  toleratePatternErrors?: boolean
 }
 
 /**
@@ -81,7 +90,7 @@ export class Layer<Context extends { params: Record<string, string> }> {
       }
     }
     this.path = path
-    this.regexp = pathToRegexp(this.path, this.paramNames, this.opts)
+    this.regexp = compilePattern(this.path, this.paramNames, this.opts)
   }
 
   /** Whether `path` matches this layer. */
@@ -109,8 +118,17 @@ export class Layer<Context extends { params: Record<string, string> }> {
 
   /** Expand this layer's pattern into a URL. */
   url(params?: unknown, options?: { query?: string | Record<string, unknown> }): string {
-    const toPath = compile(this.path, { encode: encodeURIComponent })
-    const tokens = parse(this.path)
+    let toPath: (values: Record<string, unknown>) => string
+    try {
+      toPath = compile(this.path, { encode: encodeURIComponent })
+    } catch (error) {
+      // A matcher-owned pattern (radix `**`, for one) has no compiled form here:
+      // fill the named segments directly so a named route still expands.
+      if (this.opts.toleratePatternErrors !== true) throw error
+      toPath = values => this.path.replace(/:([A-Za-z0-9_]+)|\*/g, (match, name: string | undefined) =>
+        name === undefined ? String(values['*'] ?? match) : encodeURIComponent(String(values[name] ?? match)))
+    }
+    const tokens = this.parseTokens()
     let values: Record<string, unknown> = {}
     if (Array.isArray(params)) {
       let i = 0
@@ -133,8 +151,18 @@ export class Layer<Context extends { params: Record<string, string> }> {
   setPrefix(prefix: string): this {
     this.path = this.path !== '/' || this.opts.strict === true ? `${prefix}${this.path}` : prefix
     this.paramNames = []
-    this.regexp = pathToRegexp(this.path, this.paramNames, this.opts)
+    this.regexp = compilePattern(this.path, this.paramNames, this.opts)
     return this
+  }
+
+  /** Parsed tokens of this layer's pattern, or none when the matcher owns it. */
+  private parseTokens(): ReturnType<typeof parse> {
+    try {
+      return parse(this.path)
+    } catch (error) {
+      if (this.opts.toleratePatternErrors !== true) throw error
+      return []
+    }
   }
 
   /**
@@ -170,6 +198,28 @@ function safeDecode(text: string): string {
     return decodeURIComponent(text)
   } catch {
     return text
+  }
+}
+
+/**
+ * Compile one pattern, or leave it to the router's matcher.
+ *
+ * @param path - the layer's pattern.
+ * @param keys - filled with the pattern's parameter descriptors.
+ * @param tolerate - accept a pattern `path-to-regexp` rejects (radix `**`).
+ * @returns the compiled matcher, or one that never matches when the pattern is matcher-owned.
+ * @throws when the pattern is uncompilable and {@link LayerOptions.toleratePatternErrors} is not set.
+ */
+function compilePattern(path: string, keys: Key[], opts: LayerOptions): RegExp {
+  try {
+    const keys_: Key[] = []
+    const regexp = pathToRegexp(path, keys_, opts)
+    keys.push(...keys_)
+    return regexp
+  } catch (error) {
+    if (opts.toleratePatternErrors !== true) throw error
+    keys.length = 0
+    return NEVER_MATCHES
   }
 }
 

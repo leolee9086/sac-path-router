@@ -66,8 +66,41 @@ export class RouterContext {
   /** Final response. Setting it short-circuits the chain and the network. */
   response?: Response
 
-  /** Every layer whose path matched, in registration order. */
-  matched: MatchedLayer[] = []
+  /**
+   * Every layer whose path matched, in registration order.
+   *
+   * Resolved on first read: collecting path matches is the expensive half of
+   * matching (a scan in radix mode), and only `allowedMethods()` and the fetch
+   * entry's claim check need it, so a plain route hit never pays for it.
+   */
+  get matched(): MatchedLayer[] {
+    if (this.matchedProvider !== undefined) {
+      this.matchedLayers = this.matchedProvider()
+      this.matchedProvider = undefined
+    }
+    return this.matchedLayers
+  }
+
+  set matched(value: MatchedLayer[]) {
+    this.matchedProvider = undefined
+    this.matchedLayers = value
+  }
+
+  /**
+   * Defer the matched-layer query until {@link matched} is read.
+   *
+   * @param provider - resolves the matched layers for this request.
+   */
+  setMatchedProvider(provider: () => MatchedLayer[]): void {
+    this.matchedProvider = provider
+    this.matchedLayers = []
+  }
+
+  /** Matched layers once resolved. */
+  private matchedLayers: MatchedLayer[] = []
+
+  /** Pending matched-layer query; cleared by the first read. */
+  private matchedProvider?: () => MatchedLayer[]
 
   /** The router that dispatched this context. */
   router?: unknown

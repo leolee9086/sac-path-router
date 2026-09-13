@@ -6,7 +6,9 @@
  */
 
 import { RouterContext } from '../core/context.js'
-import type { ExpressResponse } from './types.js'
+import type { CookieOptions, ExpressResponse } from './types.js'
+
+export type { CookieOptions } from './types.js'
 
 /** Statuses that must not carry a body. */
 const BODYLESS = new Set([204, 205, 304])
@@ -110,4 +112,75 @@ export class ResponseBuilder implements ExpressResponse {
     this.statusCode = code
     return this.end(undefined)
   }
+
+  /**
+   * Set one cookie.
+   *
+   * Serialized here rather than delegated, so a local route needs no Node
+   * builtin. `SameSite=None` implies `Secure`, as browsers require.
+   *
+   * @param name - cookie name.
+   * @param value - cookie value.
+   * @param options - cookie attributes.
+   */
+  cookie(name: string, value: string, options: CookieOptions = {}): this {
+    const parts = [`${encodeURIComponent(name)}=${encodeURIComponent(value)}`]
+    if (options.maxAge !== undefined) parts.push(`Max-Age=${Math.floor(options.maxAge / 1000)}`)
+    if (options.domain !== undefined) parts.push(`Domain=${options.domain}`)
+    if (options.path !== undefined) parts.push(`Path=${options.path}`)
+    if (options.expires !== undefined) parts.push(`Expires=${options.expires.toUTCString()}`)
+    if (options.httpOnly === true) parts.push('HttpOnly')
+    if (options.secure === true || options.sameSite === 'none') parts.push('Secure')
+    if (options.sameSite !== undefined) {
+      parts.push(`SameSite=${options.sameSite === true ? 'Strict' : options.sameSite === 'lax' ? 'Lax' : 'None'}`)
+    }
+    this.context.responseHeaders.append('set-cookie', parts.join('; '))
+    return this
+  }
+
+  /** Expire one cookie. */
+  clearCookie(name: string, options: CookieOptions = {}): this {
+    return this.cookie(name, '', { ...options, expires: new Date(0), maxAge: 0 })
+  }
+
+  /** Vary the response on one request header. */
+  vary(field: string): this {
+    const existing = this.context.responseHeaders.get('vary')
+    const fields = new Set((existing ?? '').split(',').map(part => part.trim()).filter(Boolean))
+    fields.add(field)
+    return this.set('vary', [...fields].join(', '))
+  }
+
+  /** Add `Link` headers for one resource map. */
+  links(links: Record<string, string>): this {
+    for (const [rel, url] of Object.entries(links)) this.append('link', `<${url}>; rel="${rel}"`)
+    return this
+  }
+
+  /**
+   * Answer with the first representation the request accepts.
+   *
+   * @param types - media type to handler, plus an optional `default`.
+   */
+  format(types: Record<string, () => unknown>): this {
+    const accept = this.context.request.headers.get('accept') ?? '*/*'
+    for (const [type, handler] of Object.entries(types)) {
+      if (type !== 'default' && !accepts(accept, type)) continue
+      handler()
+      return this
+    }
+    return this.status(406).end(undefined)
+  }
+}
+
+/** Cookie attributes this builder serializes are declared in `./types.js`. */
+
+/** Whether an `Accept` header takes one media type, honouring `*​/*` and `type/*`. */
+function accepts(accept: string, type: string): boolean {
+  const [wanted] = type.split('/')
+  return accept.split(',').some((entry) => {
+    const media = entry.split(';')[0]?.trim() ?? ''
+    if (media === '*/*' || media === type) return true
+    return media.endsWith('/*') && wanted !== undefined && media.slice(0, -2) === wanted
+  })
 }

@@ -24,3 +24,8 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run build
       - run: pnpm test
+      # Informational: prints the routing table for both matchers. No threshold is
+      # asserted — shared-runner jitter would turn a perf gate into a flaky one.
+      - name: routing benchmark
+        if: matrix.node == '22'
+        run: pnpm run bench 1000 5000

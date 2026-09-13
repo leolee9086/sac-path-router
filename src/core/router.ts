@@ -10,6 +10,7 @@
 
 import { compose, type Middleware, type Next } from './compose.js'
 import { Layer, type LayerOptions } from './layer.js'
+import { createMatcher, type RouteMatch, type RouterMatcher } from './matchers.js'
 import type { RouterContext } from './context.js'
 
 /** Methods a router answers by default. */
@@ -37,6 +38,13 @@ export interface RouterOptions {
   exclusive?: boolean
   /** Prefix every registered path. */
   prefix?: string
+  /**
+   * How a path finds its layers. `regexp` (default) scans in registration order,
+   * which is Koa's contract; `radix3` indexes layers in a prefix tree and answers
+   * with the most specific match for the method, falling back to the scan for
+   * patterns the tree cannot hold.
+   */
+  matcher?: 'regexp' | 'radix3'
 }
 
 /** Result of matching one path and method. */
@@ -73,8 +81,11 @@ export class Router<Context extends RouterContext = RouterContext> {
   /** Effective options, with defaults resolved. */
   readonly settings: RouterOptions & Required<Pick<RouterOptions, 'sensitive' | 'strict' | 'exclusive'>>
 
+  /** How this router turns a path and method into layers; see {@link RouterOptions.matcher}. */
+  readonly matcher: RouterMatcher<Context>
+
   /**
-   * @param options - matching, exclusivity, and prefix options.
+   * @param options - matching, exclusivity, prefix, and matcher options.
    */
   constructor(options: RouterOptions = {}) {
     this.settings = {
@@ -83,6 +94,7 @@ export class Router<Context extends RouterContext = RouterContext> {
       strict: options.strict ?? false,
       exclusive: options.exclusive ?? false,
     }
+    this.matcher = createMatcher<Context>(options.matcher ?? 'regexp')
   }
 
   /**
@@ -108,10 +120,12 @@ export class Router<Context extends RouterContext = RouterContext> {
       sensitive: this.settings.sensitive,
       strict: this.settings.strict,
       prefix: this.settings.prefix ?? '',
+      toleratePatternErrors: this.matcher.kind === 'radix3',
       ...opts,
     })
     for (const [name, handler] of Object.entries(this.params)) layer.param(name, handler)
     this.stack.push(layer)
+    this.matcher.add(layer)
     if (layer.name !== null) this.named.set(layer.name, layer)
     return layer
   }
@@ -142,6 +156,7 @@ export class Router<Context extends RouterContext = RouterContext> {
             prefix: '',
           })
           this.stack.push(mounted)
+          this.matcher.add(mounted)
           if (mounted.name !== null) this.named.set(mounted.name, mounted)
         }
         continue
@@ -220,6 +235,7 @@ export class Router<Context extends RouterContext = RouterContext> {
         prefix: '',
       })
       this.stack.push(mounted)
+      this.matcher.add(mounted)
       if (mounted.name !== null) this.named.set(mounted.name, mounted)
     }
     return this
@@ -237,18 +253,24 @@ export class Router<Context extends RouterContext = RouterContext> {
     return layer.url(...(args as [unknown]))
   }
 
-  /** Every layer matching `path` and `method`. */
+  /** Every layer matching `path` and `method`, as the router's matcher resolves them. */
   match(path: string, method: string): MatchResult<Context> {
-    const matched: MatchResult<Context> = { path: [], pathAndMethod: [], route: false }
-    for (const layer of this.stack) {
-      if (!layer.match(path)) continue
-      matched.path.push(layer)
-      if (layer.methods.length === 0 || layer.methods.includes(method)) {
-        matched.pathAndMethod.push(layer)
-        if (layer.methods.length > 0) matched.route = true
-      }
+    const pathAndMethod = this.matcher.matchRoute(path, method).map(entry => entry.layer)
+    return {
+      path: this.matcher.matchPath(path),
+      pathAndMethod,
+      route: pathAndMethod.some(layer => layer.methods.length > 0),
     }
-    return matched
+  }
+
+  /**
+   * Whether some route of this router claims `path`, whatever the method.
+   *
+   * @param path - the request path.
+   * @returns true when a method-constrained layer's path matches.
+   */
+  claims(path: string): boolean {
+    return this.matcher.claims(path)
   }
 
   /** Dispatch one context through the matched layers, or call `next` when nothing matched. */
@@ -256,28 +278,29 @@ export class Router<Context extends RouterContext = RouterContext> {
     const router = this
     return function dispatch(context: Context, next?: Next): Promise<void> {
       const path = context.path
-      const matched = router.match(path, context.method)
-      context.matched.push(...matched.path)
+      const entries = router.matcher.matchRoute(path, context.method)
+      context.setMatchedProvider(() => router.matcher.matchPath(path))
       context.router = router
       // Nothing matched at all: hand the request to the chain's tail, which the
       // fetch entry wires to the network. A path-only match still runs the
       // pathless middleware, so `allowedMethods()` can answer 405.
-      if (matched.path.length === 0) return next === undefined ? Promise.resolve() : next()
+      if (entries.length === 0) return next === undefined ? Promise.resolve() : next()
 
-      const layers = matched.pathAndMethod
-      const mostSpecific = layers[layers.length - 1] as Layer<Context>
+      const mostSpecific = (entries[entries.length - 1] as RouteMatch<Context>).layer
       context.routePath = mostSpecific.path
       context.routeName = mostSpecific.name
 
       const chain: Middleware<Context>[] = []
-      for (const layer of router.settings.exclusive ? [mostSpecific] : layers) {
+      for (const entry of router.settings.exclusive ? [entries[entries.length - 1] as RouteMatch<Context>] : entries) {
+        const layer = entry.layer
         // A layer never starts once a response exists: two routes both writing
         // is the classic "headers already sent" defect. Post-processing inside
         // an already-started middleware still runs.
         chain.push((inner, innerNext) => (inner.responded ? Promise.resolve() : innerNext()))
         chain.push((inner, innerNext) => {
-          inner.captures = layer.captures(path)
-          inner.params = layer.params(path, inner.captures, inner.params)
+          const captures = layer.captures(path)
+          if (captures.length > 0) inner.captures = captures
+          inner.params = { ...inner.params, ...entry.params }
           inner.routePath = layer.path
           inner.routeName = layer.name
           if (layer.methods.length > 0) inner.routed = true

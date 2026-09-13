@@ -39,10 +39,12 @@
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test",
+    "bench": "node bench/routing.mjs",
     "check": "npm run typecheck && npm run build && npm run test"
   },
   "dependencies": {
-    "path-to-regexp": "^6.3.0"
+    "path-to-regexp": "^6.3.0",
+    "radix3": "^1.1.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

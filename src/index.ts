@@ -22,4 +22,7 @@ export { Router, createRouter, HTTP_METHODS } from './core/router.js'
 export type { HttpMethod, MatchResult, ParamHandler, RouterOptions } from './core/router.js'
 
 export { createFetchEntry, materialize, headSafe, DEFAULT_MAX_REWRITES } from './core/fetch-entry.js'
-export type { FetchEntry, FetchEntryOptions } from './core/fetch-entry.js'
+export type { DispatchableRouter, FetchEntry, FetchEntryOptions } from './core/fetch-entry.js'
+
+export { RegexpMatcher, Radix3Matcher, createMatcher, EVERY_METHOD } from './core/matchers.js'
+export type { MatchableContext, RouteMatch, RouterMatcher } from './core/matchers.js'
