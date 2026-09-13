@@ -1,0 +1,61 @@
+{
+  "name": "sac-path-router",
+  "version": "0.1.0",
+  "description": "Universal router with a fetch entry: Koa-style and Express-style routing over web-standard Request/Response, for browsers and Node.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.17"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./koa": {
+      "types": "./dist/koa/index.d.ts",
+      "import": "./dist/koa/index.js"
+    },
+    "./express": {
+      "types": "./dist/express/index.d.ts",
+      "import": "./dist/express/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test",
+    "check": "npm run typecheck && npm run build && npm run test"
+  },
+  "dependencies": {
+    "path-to-regexp": "^6.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "router",
+    "koa",
+    "express",
+    "fetch",
+    "isomorphic",
+    "universal",
+    "browser",
+    "middleware"
+  ]
+}
