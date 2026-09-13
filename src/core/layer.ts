@@ -3,6 +3,10 @@
  * Matching delegates to `path-to-regexp`, which runs unchanged in browsers and
  * Node, so a pattern means the same thing on both.
  *
+ * Layer shape, `setPrefix`, capture handling, and parameter-handler ordering are
+ * derived from @koa/router's `lib/layer.js` (MIT, Copyright (c) 2015 @koajs
+ * maintainers and contributors); see THIRD-PARTY-NOTICES.md.
+ *
  * @module sac-path-router/core/layer
  */
 

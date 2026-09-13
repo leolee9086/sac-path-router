@@ -2,6 +2,10 @@
  * The Express dialect's response builder: collects status and headers, then
  * materializes one web `Response` on the routing context.
  *
+ * Method semantics follow Express's `res` (MIT, Copyright (c) 2009-2014 TJ
+ * Holowaychuk, 2013-2014 Roman Shtylman, 2014-2015 Douglas Christopher Wilson);
+ * see THIRD-PARTY-NOTICES.md.
+ *
  * @module sac-path-router/express/response
  */
 

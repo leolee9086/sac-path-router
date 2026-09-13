@@ -5,7 +5,8 @@
  * dispatch contract. `radix3` indexes layers in a prefix tree and answers with
  * the most specific match for the method, falling back to the same scan when a
  * pattern is not expressible in radix syntax — the shape the original webKoa
- * radix routers used, kept here behind one option.
+ * radix routers used, kept here behind one option. {@link Radix3Matcher}
+ * follows that original implementation, which is the author's own code.
  *
  * @module sac-path-router/core/matchers
  */

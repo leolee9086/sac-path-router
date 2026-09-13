@@ -7,6 +7,11 @@
  * socket, so the same router runs in a browser, in Node, and as an in-process
  * fetch interceptor.
  *
+ * Layer, Route, the `handle` walk, parameter handling, and the four-argument
+ * error-middleware convention are derived from Express's `lib/router` (MIT,
+ * Copyright (c) 2009-2014 TJ Holowaychuk, 2013-2014 Roman Shtylman, 2014-2015
+ * Douglas Christopher Wilson); see THIRD-PARTY-NOTICES.md.
+ *
  * @module sac-path-router/express
  */
 

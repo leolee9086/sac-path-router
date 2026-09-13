@@ -5,6 +5,11 @@
  * registry and matching, and only swaps the handler signature and the response
  * builder.
  *
+ * Registration, `use`, `routes()` dispatch, `allowedMethods`, named routes, and
+ * the `GET`-implies-`HEAD` rule are derived from @koa/router's `lib/router.js`
+ * (MIT, Copyright (c) 2015 @koajs maintainers and contributors); see
+ * THIRD-PARTY-NOTICES.md.
+ *
  * @module sac-path-router/core/router
  */
 

@@ -105,9 +105,22 @@ router.use((error, req, res, next) => res.status(500).json({ message: error.mess
 
 本项目从作者既有的 **webKoa** 实现抽离并统一而来 —— 即 `SiyuanAssistantCollection` / `SACAssetsManager` 中的 Koa 全量移植、koa-router 移植、`internalFetch`，以及 `useDeps/useRadix3` 下的两支 radix3 路由器。
 
-- 自有代码：**MIT**（见 [LICENSE](./LICENSE)）
-- 运行依赖：`path-to-regexp`（MIT），未内联任何第三方源码
-- API 形状参考 Koa（MIT）、koa-router（MIT）、Express（MIT），实现为自研
+**代码确有部分取自 Koa / Express 生态的 MIT 库**（此前本 README 写成"实现为自研"是错的，已更正）：
+
+| 文件 | 来源（均为 MIT） | 取用内容 |
+|---|---|---|
+| `src/core/compose.ts` | [koa-compose](https://github.com/koajs/compose) | 组合算法：`index` 守卫、`dispatch(i)`、`next() called multiple times` 契约 |
+| `src/core/layer.ts` | [@koa/router](https://github.com/koajs/router) `lib/layer.js` | `setPrefix`、`captures`、`params`、参数处理器注入顺序、`safeDecodeURIComponent` |
+| `src/core/router.ts` | [@koa/router](https://github.com/koajs/router) `lib/router.js` | `register`、`use`（无路径 `([^/]*)` 层与前缀挂载）、`routes()` 调度、`allowedMethods`、命名路由、`GET` 隐含 `HEAD`、`matched.path/pathAndMethod/route` 结构 |
+| `src/express/index.ts` | [Express](https://github.com/expressjs/express) `lib/router` | `Layer`、`Route`、`handle` 遍历、参数处理、四参错误中间件约定、方法表 |
+| `src/express/response.ts` | [Express](https://github.com/expressjs/express) | `res.status/set/append/type/json/send/end/redirect/sendStatus/cookie/clearCookie/vary/links/format` 语义 |
+| `src/core/matchers.ts`（`Radix3Matcher`） | 作者自己的 `webKoa` `forKoaLikeRouter.js` | "radix 树命中，否则按注册顺序正则扫描"的形状 |
+
+其余部分（`src/core/context.ts`、`src/core/fetch-entry.ts`、`matchers.ts` 的 `RegexpMatcher` 与匹配器接口、`src/node/index.ts`、`src/express/types.ts`、测试与基准）为本仓库原创。
+
+- 本项目许可：**MIT**（见 [LICENSE](./LICENSE)）
+- 上游版权声明与许可全文：见 [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md)（按 MIT 要求随源码一并分发）
+- 运行依赖：`path-to-regexp`（MIT）、`radix3`（MIT），均以依赖形式安装、未内联源码
 
 ## 与既有 webKoa 的关系
 

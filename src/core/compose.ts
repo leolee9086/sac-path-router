@@ -2,6 +2,9 @@
  * Middleware composition with the Koa contract: one `next()` per middleware,
  * called at most once, awaiting the downstream chain.
  *
+ * Derived from koa-compose (MIT, Copyright (c) 2013 TJ Holowaychuk); see
+ * THIRD-PARTY-NOTICES.md.
+ *
  * @module sac-path-router/core/compose
  */
 
