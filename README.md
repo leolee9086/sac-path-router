@@ -184,6 +184,16 @@ pnpm check        # typecheck + build + test
 
 > 受限沙箱里 `node --test` 需要派生子进程，可能被拒绝；此时可逐个文件直接执行：`node test/router.test.js && node test/robustness.test.js`（结果等价）。
 
+## 赞赏
+
+![赞赏码](assets/sponsor-qr.png)
+
+> **联系作者**：逐暝（leolee9086）· 点击链接加入群聊【工具软件爱好者折腾群-综合讨论】：https://qm.qq.com/q/RAHJuyhQQ （群号 1017854502，群主 逐暝）
+
 ## License
 
 MIT
+
+---
+
+作者：逐暝 · QQ 群：1017854502 — https://qm.qq.com/q/RAHJuyhQQ
