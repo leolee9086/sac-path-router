@@ -105,7 +105,7 @@ router.use((error, req, res, next) => res.status(500).json({ message: error.mess
 
 本项目从作者既有的 **webKoa** 实现抽离并统一而来 —— 即 `SiyuanAssistantCollection` / `SACAssetsManager` 中的 Koa 全量移植、koa-router 移植、`internalFetch`，以及 `useDeps/useRadix3` 下的两支 radix3 路由器。
 
-**代码确有部分取自 Koa / Express 生态的 MIT 库**（此前本 README 写成"实现为自研"是错的，已更正）：
+**代码部分取自 Koa / Express 生态的 MIT 库**：
 
 | 文件 | 来源（均为 MIT） | 取用内容 |
 |---|---|---|
