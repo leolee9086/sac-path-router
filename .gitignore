@@ -1,5 +1,4 @@
 node_modules/
-dist/
 *.log
 .DS_Store
 .idea/
@@ -7,3 +6,6 @@ dist/
 coverage/
 
 .ghcache/
+
+# dist/ is committed: consumers install this package as a git dependency
+# (`github:leolee9086/sac-path-router`), which never runs a build step.
