@@ -1,8 +1,11 @@
 {
-  "name": "sac-path-router",
+  "name": "@leolee9086/sac-path-router",
   "version": "0.1.0",
   "description": "Universal router with a fetch entry: Koa-style and Express-style routing over web-standard Request/Response, for browsers and Node.",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "sideEffects": false,
   "engines": {

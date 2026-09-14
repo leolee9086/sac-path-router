@@ -1,11 +1,11 @@
-# sac-path-router
+# @leolee9086/sac-path-router
 
 通用路由器：**以 fetch 为入口**，同一套路由既能跑 Koa 风格的 `(ctx, next)`，也能跑 Express 风格的 `(req, res, next)`；核心只用 Web 标准（`Request` / `Response` / `Headers` / `URL` / `AbortSignal`），因此**浏览器与 Node 通用**。
 
 > Universal router with a fetch entry: Koa-style and Express-style routing over web-standard `Request`/`Response`, for browsers and Node.
 
 ```bash
-pnpm add sac-path-router
+pnpm add @leolee9086/sac-path-router
 ```
 
 ## 为什么是"fetch 入口"
@@ -13,7 +13,7 @@ pnpm add sac-path-router
 普通路由库的入口是 `(req, res)` 或 HTTP server；这里的入口是 `fetch`：
 
 ```js
-import { createRouter, createFetchEntry } from 'sac-path-router'
+import { createRouter, createFetchEntry } from '@leolee9086/sac-path-router'
 
 const router = createRouter()
 router.get('/users/:id', ctx => { ctx.status = 200; ctx.body = { id: ctx.params.id } })
@@ -33,17 +33,17 @@ await entry('https://api.test/other')       // → 交给 network
 
 | 入口 | 内容 |
 |---|---|
-| `sac-path-router` | 核心：`compose`、`Layer`、`Router`（ctx 形状）、`createContext`、`createFetchEntry` |
-| `sac-path-router/koa` | Koa 方言：`createApp`、`Application`（全局中间件 + 路由器）、`allowedMethods` |
-| `sac-path-router/express` | Express 方言：`createRouter`、`Route`、`ResponseBuilder`（`res.json/send/redirect`）、错误中间件 |
-| `sac-path-router/node` | Node 适配：`serve`、`createServer`、`toFetchRequest`、`writeFetchResponse` |
+| `@leolee9086/sac-path-router` | 核心：`compose`、`Layer`、`Router`（ctx 形状）、`createContext`、`createFetchEntry` |
+| `@leolee9086/sac-path-router/koa` | Koa 方言：`createApp`、`Application`（全局中间件 + 路由器）、`allowedMethods` |
+| `@leolee9086/sac-path-router/express` | Express 方言：`createRouter`、`Route`、`ResponseBuilder`（`res.json/send/redirect`）、错误中间件 |
+| `@leolee9086/sac-path-router/node` | Node 适配：`serve`、`createServer`、`toFetchRequest`、`writeFetchResponse` |
 
-`sac-path-router/node` 是唯一引入 Node 内置模块的入口，其余入口在浏览器里可直接加载。
+`@leolee9086/sac-path-router/node` 是唯一引入 Node 内置模块的入口，其余入口在浏览器里可直接加载。
 
 ## Koa 风格
 
 ```js
-import { createApp } from 'sac-path-router/koa'
+import { createApp } from '@leolee9086/sac-path-router/koa'
 
 const app = createApp()
 app.use(app.allowedMethods())
@@ -66,7 +66,7 @@ const response = await app.fetch({ network: fetch })('https://host/api/users/9')
 ## Express 风格
 
 ```js
-import { createRouter } from 'sac-path-router/express'
+import { createRouter } from '@leolee9086/sac-path-router/express'
 
 const router = createRouter()
 router.use('/api', apiRouter)                       // 挂载会剥掉前缀
@@ -81,7 +81,7 @@ router.use((error, req, res, next) => res.status(500).json({ message: error.mess
 
 - 核心与两个方言只用 Web 标准，不 import `node:*`
 - `fetch`、`Request`、`Response`、`AbortSignal` 在 Node 18.17+ 与所有现代浏览器都存在
-- Node 服务端：`import { serve } from 'sac-path-router/node'`，或把 `createFetchEntry(...)` 交给任意支持 fetch handler 的运行时
+- Node 服务端：`import { serve } from '@leolee9086/sac-path-router/node'`，或把 `createFetchEntry(...)` 交给任意支持 fetch handler 的运行时
 
 ## 已规避的常见路由库问题
 
@@ -132,7 +132,7 @@ router.use((error, req, res, next) => res.status(500).json({ message: error.mess
 ## 匹配器：`matcher: 'regexp' | 'radix3'`
 
 ```js
-import { createRouter } from 'sac-path-router'
+import { createRouter } from '@leolee9086/sac-path-router'
 
 createRouter()                    // 默认：按注册顺序扫描，Koa 的调度契约
 createRouter({ matcher: 'radix3' })  // 前缀树索引，按方法取"最具体"的那条
@@ -168,7 +168,7 @@ pnpm bench 1000 5000 20000
 
 ## 路线图
 
-- [ ] 更多方言：`sac-path-router/fastify`（`(request, reply)`）—— 尚未实现，不是"半成品"：目前只有 koa/express 两种 handler 形状
+- [ ] 更多方言：`@leolee9086/sac-path-router/fastify`（`(request, reply)`）—— 尚未实现，不是"半成品"：目前只有 koa/express 两种 handler 形状
 - [ ] Express 兼容度继续补齐：`app.set`/`app.locals`（应用级，属）与 `res.sendFile`（需要文件系统访问，故意不做进通用核心）
 - [ ] 多方法混合注册的 radix 索引优化：`router.all('/x')` 目前落在共享树，可按需再拆
 
