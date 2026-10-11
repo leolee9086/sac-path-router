@@ -110,6 +110,24 @@ export function createListener(handler: RequestHandler): (incoming: IncomingMess
 }
 
 /**
+ * Serve an application over `node:http`.
+ *
+ * The reference router put `listen` on the application itself. Here it lives in
+ * the Node entry instead, because only this file may import `node:http` and the
+ * core has to stay loadable in a browser.
+ *
+ * @param app - anything with `callback()`, such as a `sac-path-router/koa` application.
+ * @param options - port (0 picks a free one) and host.
+ * @returns the server, its origin, and a closer.
+ */
+export async function listen(
+  app: { callback(): RequestHandler },
+  options: { port?: number; host?: string } = {},
+): Promise<ServedServer> {
+  return await serve(app.callback(), options)
+}
+
+/**
  * Create an HTTP server for a request handler.
  *
  * @param handler - the routed fetch handler.

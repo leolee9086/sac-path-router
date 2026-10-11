@@ -68,10 +68,14 @@ export declare class Layer<Context extends {
     captures(path: string): string[];
     /** Named parameters of `path`, merged over `params`. */
     params(path: string, captures: readonly string[], params?: Record<string, string>): Record<string, string>;
-    /** Expand this layer's pattern into a URL. */
-    url(params?: unknown, options?: {
-        query?: string | Record<string, unknown>;
-    }): string;
+    /**
+     * Expand this layer's pattern into a URL.
+     *
+     * Two calling shapes, both from the router this came out of:
+     * `url({ id: '3' })` and positional `url('3', 'other')`. In the positional
+     * form a trailing plain object is read as options, not as a value.
+     */
+    url(...all: unknown[]): string;
     /** Prefix this layer's pattern, recompiling its matcher. */
     setPrefix(prefix: string): this;
     /** Parsed tokens of this layer's pattern, or none when the matcher owns it. */

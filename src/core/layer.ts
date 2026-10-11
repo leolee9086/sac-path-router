@@ -120,8 +120,30 @@ export class Layer<Context extends { params: Record<string, string> }> {
     return params
   }
 
-  /** Expand this layer's pattern into a URL. */
-  url(params?: unknown, options?: { query?: string | Record<string, unknown> }): string {
+  /**
+   * Expand this layer's pattern into a URL.
+   *
+   * Two calling shapes, both from the router this came out of:
+   * `url({ id: '3' })` and positional `url('3', 'other')`. In the positional
+   * form a trailing plain object is read as options, not as a value.
+   */
+  url(...all: unknown[]): string {
+    let params: unknown = all[0]
+    let options = (all.length > 1 ? all[all.length - 1] : undefined) as
+      | { query?: string | Record<string, unknown> }
+      | undefined
+    if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+      // Positional: every argument is a value, minus a trailing options object.
+      const collected = [...all]
+      const last = collected[collected.length - 1]
+      if (collected.length > 1 && typeof last === 'object' && last !== null && !Array.isArray(last)) {
+        options = last as { query?: string | Record<string, unknown> }
+        collected.pop()
+      }
+      params = collected
+    } else {
+      options = all[1] as { query?: string | Record<string, unknown> } | undefined
+    }
     let toPath: (values: Record<string, unknown>) => string
     try {
       toPath = compile(this.path, { encode: encodeURIComponent })

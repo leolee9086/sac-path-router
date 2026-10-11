@@ -16,12 +16,25 @@
 import { compose, type Middleware, type Next } from './compose.js'
 import { Layer, type LayerOptions } from './layer.js'
 import { createMatcher, type RouteMatch, type RouterMatcher } from './matchers.js'
+import { methodNotAllowed, notImplemented } from './errors.js'
 import type { RouterContext } from './context.js'
 
-/** Methods a router answers by default. */
+/**
+ * Methods a router answers by default.
+ *
+ * The full set @koa/router registers, not just the common ones: a router that
+ * only knows eight verbs answers 501 to the other nineteen, and the caller has
+ * no way to fix that from outside (see `allowedMethods`).
+ */
 export const HTTP_METHODS = [
-  'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'all',
+  'get', 'post', 'put', 'head', 'delete', 'options', 'trace', 'copy', 'lock',
+  'mkcol', 'move', 'purge', 'propfind', 'proppatch', 'unlock', 'report',
+  'mkactivity', 'checkout', 'merge', 'm-search', 'notify', 'subscribe',
+  'unsubscribe', 'patch', 'search', 'connect',
 ] as const
+
+/** Methods that route through the router but are not verb shortcuts. */
+export const HTTP_METHODS_WITH_ALL = [...HTTP_METHODS, 'all'] as const
 
 /** One verb shortcut. */
 export type HttpMethod = (typeof HTTP_METHODS)[number]
@@ -44,12 +57,32 @@ export interface RouterOptions {
   /** Prefix every registered path. */
   prefix?: string
   /**
+   * Host this router answers for. A string compares for equality against
+   * `ctx.host`; a RegExp is tested. Unset means every host.
+   */
+  host?: string | RegExp
+  /**
+   * Methods this router considers implemented, for `allowedMethods`.
+   * Defaults to {@link HTTP_METHODS}.
+   */
+  methods?: readonly string[]
+  /**
    * How a path finds its layers. `regexp` (default) scans in registration order,
    * which is Koa's contract; `radix3` indexes layers in a prefix tree and answers
    * with the most specific match for the method, falling back to the scan for
    * patterns the tree cannot hold.
    */
   matcher?: 'regexp' | 'radix3'
+}
+
+/** Options {@link Router#allowedMethods} takes. */
+export interface AllowedMethodsOptions {
+  /** Throw the error instead of writing the status. */
+  throw?: boolean
+  /** Error to throw for a method the router does not implement at all. */
+  notImplemented?: () => unknown
+  /** Error to throw for a path that exists but not for this method. */
+  methodNotAllowed?: () => unknown
 }
 
 /** Result of matching one path and method. */
@@ -202,10 +235,50 @@ export class Router<Context extends RouterContext = RouterContext> {
   patch(...args: [string, ...unknown[]]): this { return this.verb('patch', args) }
   /** Route `DELETE`. */
   delete(...args: [string, ...unknown[]]): this { return this.verb('delete', args) }
+  /** Route `DELETE`; the alias @koa/router also exposes. */
+  del(...args: [string, ...unknown[]]): this { return this.verb('delete', args) }
   /** Route `HEAD`. */
   head(...args: [string, ...unknown[]]): this { return this.verb('head', args) }
   /** Route `OPTIONS`. */
   options(...args: [string, ...unknown[]]): this { return this.verb('options', args) }
+  /** Route `TRACE`. */
+  trace(...args: [string, ...unknown[]]): this { return this.verb('trace', args) }
+  /** Route `COPY`. */
+  copy(...args: [string, ...unknown[]]): this { return this.verb('copy', args) }
+  /** Route `LOCK`. */
+  lock(...args: [string, ...unknown[]]): this { return this.verb('lock', args) }
+  /** Route `MKCOL`. */
+  mkcol(...args: [string, ...unknown[]]): this { return this.verb('mkcol', args) }
+  /** Route `MOVE`. */
+  move(...args: [string, ...unknown[]]): this { return this.verb('move', args) }
+  /** Route `PURGE`. */
+  purge(...args: [string, ...unknown[]]): this { return this.verb('purge', args) }
+  /** Route `PROPFIND`. */
+  propfind(...args: [string, ...unknown[]]): this { return this.verb('propfind', args) }
+  /** Route `PROPPATCH`. */
+  proppatch(...args: [string, ...unknown[]]): this { return this.verb('proppatch', args) }
+  /** Route `UNLOCK`. */
+  unlock(...args: [string, ...unknown[]]): this { return this.verb('unlock', args) }
+  /** Route `REPORT`. */
+  report(...args: [string, ...unknown[]]): this { return this.verb('report', args) }
+  /** Route `MKACTIVITY`. */
+  mkactivity(...args: [string, ...unknown[]]): this { return this.verb('mkactivity', args) }
+  /** Route `CHECKOUT`. */
+  checkout(...args: [string, ...unknown[]]): this { return this.verb('checkout', args) }
+  /** Route `MERGE`. */
+  merge(...args: [string, ...unknown[]]): this { return this.verb('merge', args) }
+  /** Route `M-SEARCH`; the one verb whose name is not an identifier. */
+  'm-search'(...args: [string, ...unknown[]]): this { return this.verb('m-search', args) }
+  /** Route `NOTIFY`. */
+  notify(...args: [string, ...unknown[]]): this { return this.verb('notify', args) }
+  /** Route `SUBSCRIBE`. */
+  subscribe(...args: [string, ...unknown[]]): this { return this.verb('subscribe', args) }
+  /** Route `UNSUBSCRIBE`. */
+  unsubscribe(...args: [string, ...unknown[]]): this { return this.verb('unsubscribe', args) }
+  /** Route `SEARCH`. */
+  search(...args: [string, ...unknown[]]): this { return this.verb('search', args) }
+  /** Route `CONNECT`. */
+  connect(...args: [string, ...unknown[]]): this { return this.verb('connect', args) }
   /** Route every method. */
   all(...args: [string, ...unknown[]]): this { return this.verb('all', args) }
 
@@ -246,15 +319,26 @@ export class Router<Context extends RouterContext = RouterContext> {
     return this
   }
 
-  /** The layer registered under `name`, when one exists. */
-  route(name: string): Layer<Context> | undefined {
-    return this.named.get(name)
+  /**
+   * The layer registered under `name`, or `false` when there is none.
+   *
+   * `false` rather than `undefined` because that is what the router this was
+   * extracted from returns, and callers test the result for truthiness.
+   */
+  route(name: string): Layer<Context> | false {
+    return this.named.get(name) ?? false
   }
 
-  /** Expand a named route into a URL. */
-  url(name: string, ...args: unknown[]): string {
+  /**
+   * Expand a named route into a URL.
+   *
+   * An unknown name yields an `Error` **as the return value**, not a throw:
+   * the original router let callers decide, and `redirect()` relies on it
+   * (`if (source instanceof Error) throw source`).
+   */
+  url(name: string, ...args: unknown[]): string | Error {
     const layer = this.named.get(name)
-    if (layer === undefined) throw new Error(`sac-path-router: no route named "${name}"`)
+    if (layer === undefined) return new Error(`sac-path-router: no route named "${name}"`)
     return layer.url(...(args as [unknown]))
   }
 
@@ -271,10 +355,17 @@ export class Router<Context extends RouterContext = RouterContext> {
   /**
    * Whether some route of this router claims `path`, whatever the method.
    *
+   * A router configured for another host claims nothing: `routes()` hands such
+   * a request straight on, and the fetch entry's "a claimed path is ours, so a
+   * method nobody answers is a 405" rule must not fire for a router that never
+   * looked at the request.
+   *
    * @param path - the request path.
+   * @param host - the request's host, when the caller knows it.
    * @returns true when a method-constrained layer's path matches.
    */
-  claims(path: string): boolean {
+  claims(path: string, host?: string): boolean {
+    if (host !== undefined && !this.matchHost(host)) return false
     return this.matcher.claims(path)
   }
 
@@ -282,9 +373,12 @@ export class Router<Context extends RouterContext = RouterContext> {
   routes(): (context: Context, next?: Next) => Promise<void> {
     const router = this
     return function dispatch(context: Context, next?: Next): Promise<void> {
+      // Host gate: a router configured for another host passes the request on
+      // untouched, exactly as the original did.
+      if (!router.matchHost(context.host)) return next === undefined ? Promise.resolve() : next()
       const path = context.path
       const entries = router.matcher.matchRoute(path, context.method)
-      context.setMatchedProvider(() => router.matcher.matchPath(path))
+      context.appendMatched(() => router.matcher.matchPath(path))
       context.router = router
       // Nothing matched at all: hand the request to the chain's tail, which the
       // fetch entry wires to the network. A path-only match still runs the
@@ -306,8 +400,18 @@ export class Router<Context extends RouterContext = RouterContext> {
           const captures = layer.captures(path)
           if (captures.length > 0) inner.captures = captures
           inner.params = { ...inner.params, ...entry.params }
+          // Params are published on the request as well: middleware written
+          // against the router this was extracted from reads `ctx.request.params`.
+          Object.defineProperty(inner.request, 'params', {
+            value: inner.params,
+            configurable: true,
+            writable: true,
+          })
           inner.routePath = layer.path
           inner.routeName = layer.name
+          // The underscored pair is the name that router published.
+          inner._matchedRoute = layer.path
+          if (layer.name !== null) inner._matchedRouteName = layer.name
           if (layer.methods.length > 0) inner.routed = true
           return innerNext()
         })
@@ -319,12 +423,85 @@ export class Router<Context extends RouterContext = RouterContext> {
   }
 
   /**
+   * Expand a path pattern into a URL without needing a registered route.
+   *
+   * The router this was extracted from exposed this as a static, so a pattern
+   * could be expanded before anything registered it.
+   *
+   * @param path - the pattern to expand.
+   * @param args - parameter values, positional or as one object.
+   */
+  static url(path: string, ...args: unknown[]): string {
+    const scratch = new Layer<{ params: Record<string, string> }>(path, [], () => undefined)
+    return scratch.url(...(args as [unknown]))
+  }
+
+  /**
+   * Answer `source` with a redirect to `destination`.
+   *
+   * Either argument may be a route name instead of a path, and `destination`
+   * may be an absolute URL. Default status is 301, as the original used. The
+   * body is negotiated: HTML for a browser that asked for it, plain text
+   * otherwise.
+   */
+  redirect(source: string, destination: string, code?: number): this {
+    const from = source.startsWith('/') ? source : this.expandName(source)
+    const to = destination.startsWith('/') || destination.includes('://')
+      ? destination
+      : this.expandName(destination)
+    return this.all(from, (context: Context) => {
+      context.responseHeaders.set('Location', encodeURI(to))
+      context.status = code ?? 301
+      const accept = context.request.headers.get('accept') ?? ''
+      if (accept.includes('text/html')) {
+        context.responseHeaders.set('Content-Type', 'text/html; charset=utf-8')
+        context.body = `Redirecting to <a href="${escapeHtml(to)}">${escapeHtml(to)}</a>.`
+        return
+      }
+      context.responseHeaders.set('Content-Type', 'text/plain; charset=utf-8')
+      context.body = `Redirecting to ${to}.`
+    })
+  }
+
+  /** A named route's URL; throws when the name is unknown (as `redirect` needs). */
+  private expandName(name: string): string {
+    const expanded = this.url(name)
+    if (expanded instanceof Error) throw expanded
+    return expanded
+  }
+
+  /** `routes()`, under the name @koa/router also exposes it as. */
+  middleware(): (context: Context, next?: Next) => Promise<void> {
+    return this.routes()
+  }
+
+  /**
+   * Whether this router answers for `input` as a Host.
+   *
+   * A string compares for equality; a RegExp is tested. No `host` configured
+   * means every host is this router's business. (The router this was extracted
+   * from opened with a bare `return true`, so the rest of that function was
+   * dead code — this implements the semantics it was clearly meant to have.)
+   */
+  matchHost(input: string | undefined): boolean {
+    const { host } = this.settings
+    if (host === undefined) return true
+    if (input === undefined) return false
+    if (typeof host === 'string') return input === host
+    return host.test(input)
+  }
+
+  /**
    * Answer `OPTIONS`, `405`, and `501` for matched paths, in Koa's shape.
    *
    * @param options - `throw: true` throws instead of writing the status.
    */
-  allowedMethods(options: { throw?: boolean } = {}): Middleware<Context> {
-    const implemented = HTTP_METHODS
+  allowedMethods(options: AllowedMethodsOptions = {}): Middleware<Context> {
+    // `settings.methods` lets a caller narrow or widen what counts as
+    // implemented; the default is the full method table. Reading it here rather
+    // than using the constant directly is what keeps the other nineteen verbs
+    // from being answered with 501.
+    const implemented = (this.settings.methods ?? HTTP_METHODS).map(method => method.toLowerCase())
     return async (context: Context, next: Next) => {
       await next()
       if (context.responded) return
@@ -332,8 +509,8 @@ export class Router<Context extends RouterContext = RouterContext> {
       const allowed = new Set<string>()
       for (const layer of context.matched) for (const method of layer.methods) allowed.add(method)
       const list = [...allowed].join(', ')
-      if (!implemented.includes(context.method.toLowerCase() as HttpMethod)) {
-        if (options.throw === true) throw new Error('sac-path-router: method not implemented')
+      if (!implemented.includes(context.method.toLowerCase())) {
+        if (options.throw === true) throw options.notImplemented?.() ?? notImplemented()
         context.status = 501
         context.responseHeaders.set('Allow', list)
         return
@@ -346,12 +523,22 @@ export class Router<Context extends RouterContext = RouterContext> {
         return
       }
       if (!allowed.has(context.method)) {
-        if (options.throw === true) throw new Error('sac-path-router: method not allowed')
+        if (options.throw === true) throw options.methodNotAllowed?.() ?? methodNotAllowed()
         context.status = 405
         context.responseHeaders.set('Allow', list)
       }
     }
   }
+}
+
+/** Escape the five characters that matter inside HTML text and attributes. */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 /** Convenience factory, so callers need not use `new`. */

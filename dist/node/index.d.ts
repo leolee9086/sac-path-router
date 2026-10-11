@@ -41,6 +41,23 @@ export declare function writeFetchResponse(outgoing: ServerResponse, response: R
  */
 export declare function createListener(handler: RequestHandler): (incoming: IncomingMessage, outgoing: ServerResponse) => void;
 /**
+ * Serve an application over `node:http`.
+ *
+ * The reference router put `listen` on the application itself. Here it lives in
+ * the Node entry instead, because only this file may import `node:http` and the
+ * core has to stay loadable in a browser.
+ *
+ * @param app - anything with `callback()`, such as a `sac-path-router/koa` application.
+ * @param options - port (0 picks a free one) and host.
+ * @returns the server, its origin, and a closer.
+ */
+export declare function listen(app: {
+    callback(): RequestHandler;
+}, options?: {
+    port?: number;
+    host?: string;
+}): Promise<ServedServer>;
+/**
  * Create an HTTP server for a request handler.
  *
  * @param handler - the routed fetch handler.

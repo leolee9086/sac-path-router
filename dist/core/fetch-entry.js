@@ -28,6 +28,30 @@ export function createFetchEntry(options) {
         for (let hop = 0; hop <= maxRewrites; hop += 1) {
             const build = (options.createContext ?? createContext);
             const context = build(request);
+            // Publish the caller's body on the context, so a middleware can tell what
+            // kind of body it is without consuming it: `await request.text()` would eat
+            // the stream, and a FormData or a stream must be left alone entirely. Only
+            // the first hop sets it — after an internal redirect the rewritten body is
+            // already part of the rebuilt request.
+            // 只记**字符串** body。
+            //
+            // 上面那句 `new Request(input, init)` 已经接管了流式 body；如果把同一个流也
+            // 交给 `send()`，这次请求会把流消费两遍，最终表现为传输层错误。非字符串 body
+            // 就留成 undefined，`send` 自然回退到 request 自己那份 —— 那是唯一的一份。
+            if (hop === 0 && typeof init?.body === 'string')
+                context.requestBody = init.body;
+            // A caller that passed a `Request` and no `init` — what most SDKs do — keeps
+            // its body inside that request, where the only way to see it is to read it.
+            // Cloning keeps the original intact.
+            //
+            // No `catch` here on purpose: if the body cannot be read, that is a fact the
+            // caller needs, not something to paper over by sending a request nobody
+            // rewrote. Swallowing it would turn a real failure into a silent difference
+            // between what the caller sent and what the model saw.
+            else if (hop === 0 && init === undefined && request.body !== null
+                && request.method !== 'GET' && request.method !== 'HEAD') {
+                context.requestBody = await request.clone().text();
+            }
             const scope = options.scope?.(request);
             if (scope !== undefined)
                 context.scope = scope;
@@ -43,7 +67,7 @@ export function createFetchEntry(options) {
                 // method no route answers is a 405, not something to forward upstream.
                 // Both facts come from the dispatch that just ran, so the entry works
                 // with any dialect.
-                const claimed = options.router.claims?.(context.path)
+                const claimed = options.router.claims?.(context.path, context.host)
                     ?? context.matched.some(layer => layer.methods.length > 0);
                 if (claimed && !context.routed)
                     return;
@@ -95,8 +119,12 @@ async function send(context, original, options) {
         signal: original.signal,
         redirect: original.redirect,
     };
-    if (carriesBody && original.body !== null) {
-        init.body = original.body;
+    // The body a middleware assigned wins over the one that arrived: this is the
+    // fourth part of the outgoing target, next to url / method / headers, and the
+    // only one a body-rewriting middleware touches.
+    const body = context.requestBody ?? original.body;
+    if (carriesBody && body !== null) {
+        init.body = body;
         // Node requires the half-duplex marker when a stream is sent as a body.
         init.duplex = 'half';
     }
@@ -116,6 +144,14 @@ function rebuild(original, context) {
         signal: original.signal,
         redirect: original.redirect,
     };
+    // Carry the body a middleware assigned into the re-dispatch: the next hop
+    // then sees the rewritten body as its own `original.body`, instead of the
+    // rewrite being lost at the first internal redirect.
+    const body = context.requestBody ?? original.body;
+    if (context.method !== 'GET' && context.method !== 'HEAD' && body !== null) {
+        init.body = body;
+        init.duplex = 'half';
+    }
     return new Request(context.url, init);
 }
 /**

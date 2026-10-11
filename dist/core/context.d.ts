@@ -38,6 +38,17 @@ export declare class RouterContext {
     method: string;
     /** Outgoing request headers, detached from the incoming request. */
     readonly headers: Headers;
+    /**
+     * Outgoing request body. Mutable: a middleware may rewrite it.
+     *
+     * `undefined` means "send whatever the request arrived with". It sits next to
+     * `url` / `method` / `headers` because it is the fourth part of the outgoing
+     * target, and the only one a body-rewriting middleware has to touch.
+     *
+     * A middleware that reads `request.body` consumes the stream; it must assign
+     * here as well, or the outgoing request has nothing left to send.
+     */
+    requestBody: BodyInit | null | undefined;
     /** Response headers a local (non-network) route should send. */
     readonly responseHeaders: Headers;
     /** Matched parameters of the current layer. */
@@ -46,8 +57,18 @@ export declare class RouterContext {
     captures: string[];
     /** Host-owned per-request state; `scope` carries {@link RouterScope}. */
     state: Record<string, unknown>;
-    /** Status a local response uses; defaults to 404, as in Koa. */
-    status: number;
+    /** Backing field of {@link status}. */
+    private statusCode;
+    /**
+     * Status a local response uses; defaults to 404, as in Koa.
+     *
+     * Assigning validates the code the way Koa's response setter does, and clears
+     * the body for the statuses that must not carry one. A plain field would let
+     * `ctx.status = 99` or `ctx.status = 'x'` through to `new Response()`, which
+     * throws much later with a far less useful message.
+     */
+    get status(): number;
+    set status(code: number);
     /** Body a local route sets; a string, JSON value, or a `BodyInit`. */
     body: unknown;
     /** Final response. Setting it short-circuits the chain and the network. */
@@ -64,9 +85,14 @@ export declare class RouterContext {
     /**
      * Defer the matched-layer query until {@link matched} is read.
      *
-     * @param provider - resolves the matched layers for this request.
+     * **Adds to** whatever earlier routers already contributed, rather than
+     * replacing it: when several routers are mounted in one chain each reports
+     * its own matches and `allowedMethods()` has to see all of them. The
+     * original router pushed onto `ctx.matched` for the same reason.
+     *
+     * @param provider - resolves this router's matched layers.
      */
-    setMatchedProvider(provider: () => MatchedLayer[]): void;
+    appendMatched(provider: () => MatchedLayer[]): void;
     /** Matched layers once resolved. */
     private matchedLayers;
     /** Pending matched-layer query; cleared by the first read. */
@@ -77,6 +103,15 @@ export declare class RouterContext {
     routePath?: string;
     /** Name of the most specific matched layer, when it has one. */
     routeName?: string | null;
+    /**
+     * Path of the most specific layer that actually ran.
+     *
+     * Underscored because that is the name the original router published, and
+     * middleware in the wild reads it.
+     */
+    _matchedRoute?: string;
+    /** Name of the most specific layer that actually ran, when it has one. */
+    _matchedRouteName?: string;
     /** Set once a method-constrained route layer actually ran. */
     routed: boolean;
     /** Set once a handler produced a response. */
@@ -90,6 +125,11 @@ export declare class RouterContext {
     set path(value: string);
     /** Query parameters of the current target. */
     get query(): Record<string, string>;
+    /**
+     * Host this request is addressed to: the outgoing `Host` header when one is
+     * set, otherwise the target URL's host. `Router#matchHost` reads it.
+     */
+    get host(): string;
     /** Alias kept for Koa-shaped middleware. */
     get req(): Request;
     /** First value of one request header. */

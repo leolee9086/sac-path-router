@@ -80,8 +80,29 @@ export class Layer {
         }
         return params;
     }
-    /** Expand this layer's pattern into a URL. */
-    url(params, options) {
+    /**
+     * Expand this layer's pattern into a URL.
+     *
+     * Two calling shapes, both from the router this came out of:
+     * `url({ id: '3' })` and positional `url('3', 'other')`. In the positional
+     * form a trailing plain object is read as options, not as a value.
+     */
+    url(...all) {
+        let params = all[0];
+        let options = (all.length > 1 ? all[all.length - 1] : undefined);
+        if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+            // Positional: every argument is a value, minus a trailing options object.
+            const collected = [...all];
+            const last = collected[collected.length - 1];
+            if (collected.length > 1 && typeof last === 'object' && last !== null && !Array.isArray(last)) {
+                options = last;
+                collected.pop();
+            }
+            params = collected;
+        }
+        else {
+            options = all[1];
+        }
         let toPath;
         try {
             toPath = compile(this.path, { encode: encodeURIComponent });

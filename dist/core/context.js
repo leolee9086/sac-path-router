@@ -18,6 +18,17 @@ export class RouterContext {
     method;
     /** Outgoing request headers, detached from the incoming request. */
     headers;
+    /**
+     * Outgoing request body. Mutable: a middleware may rewrite it.
+     *
+     * `undefined` means "send whatever the request arrived with". It sits next to
+     * `url` / `method` / `headers` because it is the fourth part of the outgoing
+     * target, and the only one a body-rewriting middleware has to touch.
+     *
+     * A middleware that reads `request.body` consumes the stream; it must assign
+     * here as well, or the outgoing request has nothing left to send.
+     */
+    requestBody;
     /** Response headers a local (non-network) route should send. */
     responseHeaders = new Headers();
     /** Matched parameters of the current layer. */
@@ -26,8 +37,28 @@ export class RouterContext {
     captures = [];
     /** Host-owned per-request state; `scope` carries {@link RouterScope}. */
     state = {};
-    /** Status a local response uses; defaults to 404, as in Koa. */
-    status = 404;
+    /** Backing field of {@link status}. */
+    statusCode = 404;
+    /**
+     * Status a local response uses; defaults to 404, as in Koa.
+     *
+     * Assigning validates the code the way Koa's response setter does, and clears
+     * the body for the statuses that must not carry one. A plain field would let
+     * `ctx.status = 99` or `ctx.status = 'x'` through to `new Response()`, which
+     * throws much later with a far less useful message.
+     */
+    get status() {
+        return this.statusCode;
+    }
+    set status(code) {
+        if (!Number.isInteger(code))
+            throw new TypeError('status code must be a number');
+        if (code < 100 || code > 999)
+            throw new RangeError(`invalid status code: ${code}`);
+        this.statusCode = code;
+        if (code === 204 || code === 205 || code === 304)
+            this.body = null;
+    }
     /** Body a local route sets; a string, JSON value, or a `BodyInit`. */
     body;
     /** Final response. Setting it short-circuits the chain and the network. */
@@ -53,11 +84,20 @@ export class RouterContext {
     /**
      * Defer the matched-layer query until {@link matched} is read.
      *
-     * @param provider - resolves the matched layers for this request.
+     * **Adds to** whatever earlier routers already contributed, rather than
+     * replacing it: when several routers are mounted in one chain each reports
+     * its own matches and `allowedMethods()` has to see all of them. The
+     * original router pushed onto `ctx.matched` for the same reason.
+     *
+     * @param provider - resolves this router's matched layers.
      */
-    setMatchedProvider(provider) {
-        this.matchedProvider = provider;
-        this.matchedLayers = [];
+    appendMatched(provider) {
+        const earlier = this.matchedProvider;
+        if (earlier === undefined) {
+            this.matchedProvider = provider;
+            return;
+        }
+        this.matchedProvider = () => [...earlier(), ...provider()];
     }
     /** Matched layers once resolved. */
     matchedLayers = [];
@@ -69,6 +109,15 @@ export class RouterContext {
     routePath;
     /** Name of the most specific matched layer, when it has one. */
     routeName;
+    /**
+     * Path of the most specific layer that actually ran.
+     *
+     * Underscored because that is the name the original router published, and
+     * middleware in the wild reads it.
+     */
+    _matchedRoute;
+    /** Name of the most specific layer that actually ran, when it has one. */
+    _matchedRouteName;
     /** Set once a method-constrained route layer actually ran. */
     routed = false;
     /** Set once a handler produced a response. */
@@ -101,6 +150,13 @@ export class RouterContext {
     /** Query parameters of the current target. */
     get query() {
         return Object.fromEntries(this.url.searchParams);
+    }
+    /**
+     * Host this request is addressed to: the outgoing `Host` header when one is
+     * set, otherwise the target URL's host. `Router#matchHost` reads it.
+     */
+    get host() {
+        return this.headers.get('host') ?? this.url.host;
     }
     /** Alias kept for Koa-shaped middleware. */
     get req() {

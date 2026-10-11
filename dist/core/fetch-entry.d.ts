@@ -21,7 +21,7 @@ export interface DispatchableRouter<Context extends RouterContext = RouterContex
      * Whether some route claims a path, whatever the method. A dialect that does
      * not expose it falls back to the matched layers its dispatch recorded.
      */
-    claims?(path: string): boolean;
+    claims?(path: string, host?: string): boolean;
 }
 /** Options for {@link createFetchEntry}. */
 export interface FetchEntryOptions<Context extends RouterContext = RouterContext> {
