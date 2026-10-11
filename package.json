@@ -1,68 +1,74 @@
-{
-  "name": "@leolee9086/sac-path-router",
-  "version": "0.1.1",
-  "description": "Universal router with a fetch entry: Koa-style and Express-style routing over web-standard Request/Response, for browsers and Node.",
-  "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  },
-  "type": "module",
-  "sideEffects": false,
-  "engines": {
-    "node": ">=18.17"
-  },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./koa": {
-      "types": "./dist/koa/index.d.ts",
-      "import": "./dist/koa/index.js"
-    },
-    "./express": {
-      "types": "./dist/express/index.d.ts",
-      "import": "./dist/express/index.js"
-    },
-    "./node": {
-      "types": "./dist/node/index.d.ts",
-      "import": "./dist/node/index.js"
-    },
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE",
-    "THIRD-PARTY-NOTICES.md",
-    "assets"
-  ],
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test",
-    "bench": "node bench/routing.mjs",
-    "check": "npm run typecheck && npm run build && npm run test"
-  },
-  "dependencies": {
-    "path-to-regexp": "^6.3.0",
-    "radix3": "^1.1.2"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
-  },
-  "keywords": [
-    "router",
-    "koa",
-    "express",
-    "fetch",
-    "isomorphic",
-    "universal",
-    "browser",
-    "middleware"
-  ]
-}
+<path>D:\dev\sac-path-router\package.json</path>
+<type>file</type>
+<content>
+1: {
+2:   "name": "@leolee9086/sac-path-router",
+3:   "version": "0.2.0",
+4:   "description": "Universal router with a fetch entry: Koa-style and Express-style routing over web-standard Request/Response, for browsers and Node.",
+5:   "license": "MIT",
+6:   "publishConfig": {
+7:     "access": "public"
+8:   },
+9:   "type": "module",
+10:   "sideEffects": false,
+11:   "engines": {
+12:     "node": ">=18.17"
+13:   },
+14:   "main": "./dist/index.js",
+15:   "types": "./dist/index.d.ts",
+16:   "exports": {
+17:     ".": {
+18:       "types": "./dist/index.d.ts",
+19:       "import": "./dist/index.js"
+20:     },
+21:     "./koa": {
+22:       "types": "./dist/koa/index.d.ts",
+23:       "import": "./dist/koa/index.js"
+24:     },
+25:     "./express": {
+26:       "types": "./dist/express/index.d.ts",
+27:       "import": "./dist/express/index.js"
+28:     },
+29:     "./node": {
+30:       "types": "./dist/node/index.d.ts",
+31:       "import": "./dist/node/index.js"
+32:     },
+33:     "./package.json": "./package.json"
+34:   },
+35:   "files": [
+36:     "dist",
+37:     "README.md",
+38:     "LICENSE",
+39:     "THIRD-PARTY-NOTICES.md",
+40:     "assets"
+41:   ],
+42:   "scripts": {
+43:     "build": "tsc -p tsconfig.json",
+44:     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+45:     "typecheck": "tsc -p tsconfig.json --noEmit",
+46:     "test": "node --test",
+47:     "bench": "node bench/routing.mjs",
+48:     "check": "npm run typecheck && npm run build && npm run test"
+49:   },
+50:   "dependencies": {
+51:     "path-to-regexp": "^6.3.0",
+52:     "radix3": "^1.1.2"
+53:   },
+54:   "devDependencies": {
+55:     "@types/node": "^22.10.2",
+56:     "typescript": "^5.7.2"
+57:   },
+58:   "keywords": [
+59:     "router",
+60:     "koa",
+61:     "express",
+62:     "fetch",
+63:     "isomorphic",
+64:     "universal",
+65:     "browser",
+66:     "middleware"
+67:   ]
+68: }
+
+(End of file - total 68 lines)
+</content>
